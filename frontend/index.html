@@ -10,10 +10,110 @@ async function login(){try{let x=await api("/api/login",{method:"POST",body:JSON
 async function render(){if(!token)return loginView();try{let [me,d,c,w,n]=await Promise.all([api("/api/me"),api("/api/dashboard"),api("/api/claims"),api("/api/work-items"),api("/api/notifications")]);app.innerHTML=`<div class="wrap"><header style="display:flex;justify-content:space-between;gap:10px;align-items:start"><di<h1>Hospital Revenue Command Center <small style="font-size:12px">v1.0</small></h1><div class="muted">${me.user.role} • ${me.user.organization_id}</div></div><button class="btn" onclick="logout()">Log out</button></header>
 <div class="grid"><div class="card"><div class="muted">Claims</div><div class="metric">${d.claims}</div></div><div class="card"><div class="muted">Denied value</div><div class="metric" style="color:#b42318">$${Math.round(d.denied_value).toLocaleString()}</div></div><div class="card"><div class="muted">Illustrative opportunity</div><div class="metric" style="color:#067647">$${Math.round(d.opportunity).toLocaleString()}</div></div><div class="card"><div class="muted">Deadline alerts</div><div class="metric" style="color:#b54708">${d.deadline_alerts}</div></div></div>
 ${n.notifications.filter(x=>!x.read).slice(0,5).map(x=>`<div class="notice"><b>${x.title}</b> — ${x.message} <button class="btn" onclick="readNotice(${x.id})">Mark read</button></div>`).join("")}
-<div class="tabs"><button class="tab ${currentTab==='queue'?'active':''}" onclick="tab('queue')">Claim Queue</button><button class="tab ${currentTab==='work'?'active':''}" onclick="tab('work')">Work Items</button><button class="tab ${currentTab==='docs'?'active':''}" onclick="tab('docs')">Documents</button><button class="tab ${currentTab==='audit'?'active':''}" onclick="tab('audit')">Audit Trail</button></div>
+<div class="tabs">
+<button class="tab ${currentTab==='queue'?'active':''}" onclick="tab('queue')">Claim Queue</button>
+<button class="tab ${currentTab==='denials'?'active':''}" onclick="tab('denials')">Denial Management</button>
+<button class="tab ${currentTab==='work'?'active':''}" onclick="tab('work')">Work Items</button>
+<button class="tab ${currentTab==='docs'?'active':''}" onclick="tab('docs')">Documents</button>
+<button class="tab ${currentTab==='audit'?'active':''}" onclick="tab('audit')">Audit Trail</button>
+</div>
+<button class="tab ${currentTab==='queue'?'active':''}" onclick="tab('queue')">Claim Queue</button><button class="tab ${currentTab==='work'?'active':''}" onclick="tab('work')">Work Items</button><button class="tab ${currentTab==='docs'?'active':''}" onclick="tab('docs')">Documents</button><button class="tab ${currentTab==='audit'?'active':''}" onclick="tab('audit')">Audit Trail</button></div>
 <div id="content"></div><div class="card"><b>Production boundary:</b> This prototype uses synthetic records. Before PHI, add hardened identity, encryption, centralized immutable audit logging, risk analysis, testing, backups, incident response, contractual/BAA requirements, and authorized EHR/payer integrations.</div></div>`;await loadTab(c,w)}catch(x){token="";localStorage.removeItem("rccToken");loginView()}}
 function tab(t){currentTab=t;render()}
-async function loadTab(c,w){let el=document.getElementById("content");if(currentTab==="queue"){el.innerHTML=`<div class="card"><h2>Claim Work Queue</h2><table class="table"><thead><tr><th>Priority</th><th>Claim</th><th>Payer</th><th>Amount</th><th>Status</th><th>Issue</th><th>Deadline</th><th>Owner</th><th></th></tr></thead><tbody>${c.claims.map(x=>`<tr><td><span class="pill ${x.priority==='High'?'high':'warn'}">${x.priority}</span></td><td>#${x.id}</td><td>${x.payer}</td><td><b>$${x.amount.toLocaleString()}</b></td><td>${x.status}</td><td>${x.category}</td><td>${x.deadline}</td><td>${x.owner}</td><td><button class="btn primary" onclick='openClaim(${JSON.stringify(x)})'>Work</button></td></tr>`).join("")}</tbody></table></div>`}
+async function loadTab(c,w){
+let el=document.getElementById("content");
+if(currentTab==="denials"){
+    let denied=c.claims.filter(x=>x.status==="Denied");
+    let total=denied.reduce((sum,x)=>sum+x.amount,0);
+    let categories={};
+    denied.forEach(x=>{
+        categories[x.category]=(categories[x.category]||0)+x.amount;
+    });
+    let rows=Object.entries(categories)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([category,amount])=>`
+            <tr>
+                <td><b>${category}</b></td>
+                <td>${denied.filter(x=>x.category===category).length}</td>
+                <td><b>$${Math.round(amount).toLocaleString()}</b></td>
+            </tr>
+        `).join("");
+    el.innerHTML=`
+    <div class="card">
+        <h2>Denial Management</h2>
+        <div class="grid">
+            <div class="card">
+                <div class="muted">Denied Claims</div>
+                <div class="metric">${denied.length}</div>
+            </div>
+            <div class="card">
+                <div class="muted">Denied Value</div>
+                <div class="metric" style="color:#b42318">
+                    $${Math.round(total).toLocaleString()}
+                </div>
+            </div>
+            <div class="card">
+                <div class="muted">Illustrative Recovery</div>
+                <div class="metric" style="color:#067647">
+                    $${Math.round(total*.22).toLocaleString()}
+                </div>
+            </div>
+            <div class="card">
+                <div class="muted">High Priority</div>
+                <div class="metric">
+                    ${denied.filter(x=>x.priority==="High").length}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Denials by Category</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Denial Category</th>
+                    <th>Claims</th>
+                    <th>Denied Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows || '<tr><td colspan="3">No denied claims.</td></tr>'}
+            </tbody>
+        </table>
+    </div>
+    <div class="card">
+        <h3>Priority Denials</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Claim</th>
+                    <th>Payer</th>
+                    <th>Reason</th>
+                    <th>Amount</th>
+                    <th>Deadline</th>
+                    <th>Owner</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${denied
+                    .filter(x=>x.priority==="High")
+                    .map(x=>`
+                    <tr>
+                        <td>#${x.id}</td>
+                        <td>${x.payer}</td>
+                        <td>${x.category}</td>
+                        <td><b>$${x.amount.toLocaleString()}</b></td>
+                        <td>${x.deadline}</td>
+                        <td>${x.owner}</td>
+                    </tr>
+                    `).join("")}
+            </tbody>
+        </table>
+    </div>
+    `;
+}
+
+else if(currentTab==="queue"){el.innerHTML=`<div class="card"><h2>Claim Work Queue</h2><table class="table"><thead><tr><th>Priority</th><th>Claim</th><th>Payer</th><th>Amount</th><th>Status</th><th>Issue</th><th>Deadline</th><th>Owner</th><th></th></tr></thead><tbody>${c.claims.map(x=>`<tr><td><span class="pill ${x.priority==='High'?'high':'warn'}">${x.priority}</span></td><td>#${x.id}</td><td>${x.payer}</td><td><b>$${x.amount.toLocaleString()}</b></td><td>${x.status}</td><td>${x.category}</td><td>${x.deadline}</td><td>${x.owner}</td><td><button class="btn primary" onclick='openClaim(${JSON.stringify(x)})'>Work</button></td></tr>`).join("")}</tbody></table></div>`}
 else if(currentTab==="work"){el.innerHTML=`<div class="card"><h2>Work Items</h2><table class="table"><thead><tr><th>Claim</th><th>Status</th><th>Assigned</th><th>Note</th><th>Updated</th></tr></thead><tbody>${w.work_items.map(x=>`<tr><td>#${x.claim_id}</td><td>${x.status}</td><td>${x.assigned_to}</td><td>${x.notes}</td><td>${x.updated_at.slice(0,19)}</td></tr>`).join("")}</tbody></table></div>`}
 else if(currentTab==="docs"){let d=await api("/api/documents");el.innerHTML=`<div class="card"><h2>Document Index</h2><p class="muted">v0.9 stores demo text attachments. Production should use encrypted object storage with malware scanning, access controls, retention, and content-disposition protections.</p><table class="table"><thead><tr><th>Claim</th><th>Filename</th><th>Type</th><th>Created</th></tr></thead><tbody>${d.documents.map(x=>`<tr><td>#${x.claim_id}</td><td>${x.filename}</td><td>${x.content_type}</td><td>${x.created_at.slice(0,19)}</td></tr>`).join("")||'<tr><td colspan="4">No demo documents yet.</td></tr>'}</tbody></table></div>`}
 else {let a=await api("/api/audit");el.innerHTML=`<div class="card"><h2>Audit Trail</h2><div class="timeline">${a.events.map(x=>`<div class="event"><b>${x.action}</b> • ${x.resource}<br><span class="muted">${x.created_at} • user ${x.user_id}</span></div>`).join("")}</div></div>`}}
