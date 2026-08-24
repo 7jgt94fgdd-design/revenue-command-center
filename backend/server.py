@@ -30,9 +30,9 @@ def init():
     """)
     if c.execute("SELECT COUNT(*) FROM organizations").fetchone()[0]==0:
         c.executemany("INSERT INTO organizations VALUES(?,?,?)",[
-            ("gmh-demo","Guam Memorial Demo","Enterprise"),
-            ("island-demo","Island Specialty Clinic","Growth"),
-            ("pacific-demo","Pacific Family Practice","Clinic")])
+            ("gmh-demo","Guam Memorial Hospital - RCM Demo","Enterprise"),
+            ("island-demo","Island Specialty Clinic -RCM Demo","Growth"),
+            ("pacific-demo","Pacific Family Practice - RCM Demo","Clinic")])
         for email,pw,role,org in [
             ("admin@demo.local","ChangeMe123!","Owner","gmh-demo"),
             ("manager@demo.local","Manager123!","RCM Manager","gmh-demo")]:
@@ -48,7 +48,40 @@ def init():
         ("10704","gmh-demo","Example Health Plan",6800,"Pending","Timely Filing Risk","High","2026-08-30","Maria Santos")]
         c.executemany("INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?)",claims)
     c.commit(); c.close()
-
+    
+def init():
+    ...
+    c.commit()
+    c.close()
+    
+def log_claim_event(c, org, claim_id,user_id, action, from_status, to_status, note=""):
+    
+    c.execute(
+        """
+        INSERT INTO claim_events(
+            organization_id,
+            claim_id,
+            user_id,
+            action,
+            from_status,
+            to_status,
+            note,
+            created_at
+        )
+        VALUES(?,?,?,?,?,?,?,?)
+        """,
+        (
+            org,
+            claim_id,
+            user_id,
+            action,
+            from_status,
+            to_status,
+            note,
+            datetime.datetime.utcnow().isoformat()
+        )
+    )
+    
 def user_for(h):
     token=h.headers.get("Authorization","").replace("Bearer ","")
     uid=sessions.get(token)
