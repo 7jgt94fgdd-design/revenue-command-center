@@ -186,6 +186,11 @@ class Handler(BaseHTTPRequestHandler):
         c.close(); self.sendj(200,out)
 
 if __name__=="__main__":
+
     init()
-    print("Revenue Command Center API: http://127.0.0.1:8080")
-    ThreadingHTTPServer(("127.0.0.1",8080),Handler).serve_forever()
+
+    port = int(os.environ.get("PORT", "8080"))
+
+    print(f"Revenue Command Center API running on port {port}")
+
+    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
