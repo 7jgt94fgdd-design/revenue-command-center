@@ -47,7 +47,26 @@ def init():
         ("10672","gmh-demo","Pacific Care",14700,"Denied","Documentation","Medium","2026-09-12","Ana Reyes"),
         ("10704","gmh-demo","Example Health Plan",6800,"Pending","Timely Filing Risk","High","2026-08-30","Maria Santos")]
         c.executemany("INSERT INTO claims VALUES(?,?,?,?,?,?,?,?,?)",claims)
-    c.commit(); c.close()
+        # Database upgrade: add department to existing claims databases
+    columns = [row[1] for row in c.execute("PRAGMA table_info(claims)").fetchall()]
+    if "department" not in columns:
+        c.execute("ALTER TABLE claims ADD COLUMN department TEXT")
+        departments = {
+            "10802": "Emergency Department",
+            "10601": "Inpatient",
+            "10482": "Outpatient",
+            "10501": "Surgery",
+            "10519": "Radiology",
+            "10672": "Laboratory",
+            "10704": "Pharmacy"
+        }
+        for claim_id, department in departments.items():
+            c.execute(
+                "UPDATE claims SET department=? WHERE id=? AND organization_id=?",
+                (department, claim_id, "gmh-demo")
+            )
+            
+      c.commit(); c.close()
     
 def init():
     ...
